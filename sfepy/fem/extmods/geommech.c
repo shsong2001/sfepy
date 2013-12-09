@@ -703,13 +703,21 @@ int32 bf_ract( FMField *out, FMField *bf, FMField *in )
 {
   int32 iqp, ir, ic, ii, nEP, nQP, dim;
   float64 *pout, *pbf, *pin;
-
+  printf("-- geommech.c : bf_ract -----------\n");
   nEP = bf->nCol;
   nQP = bf->nLev;
   dim = in->nCol;
 
+  int32 nCol;
+  if (bf->nRow > 1) {
+  	  nCol = nEP;
+    } else{
+  	  nCol = nEP * dim;
+    }
+
 #ifdef DEBUG_FMF
-  if ((out->nRow != in->nRow) || (out->nCol != (dim * nEP))
+  /*if ((out->nRow != in->nRow) || (out->nCol != (dim * nEP))*/
+  if ((out->nRow != in->nRow) || (out->nCol != nCol)
       || (out->nLev != bf->nLev)) {
     errput( ErrHead "ERR_BadMatch: (%d %d %d), (%d %d %d), (%d %d %d)\n",
 	    out->nLev, out->nRow, out->nCol,
@@ -734,7 +742,6 @@ int32 bf_ract( FMField *out, FMField *bf, FMField *in )
       }
     }
   }
-
   return( RET_OK );
 }
 
@@ -755,9 +762,33 @@ int32 bf_actt( FMField *out, FMField *bf, FMField *in )
   nEP = bf->nCol;
   nQP = bf->nLev;
   dim = in->nRow;
+  printf("-- geommech.c : bf_actt ------------\n");
+  /*printf("bf->(nCell, nLev=nQP, nRow, nCol=nEP), (nAlloc, cellSize)\n");
+  printf("(%d, %d, %d, %d), (%d, %d)\n", bf->nCell, bf->nLev, bf->nRow,
+  		  	  	  	  	  	  	  	   bf->nCol, bf->nAlloc, bf->cellSize);
+  printf("out->(nCell, nLev, nRow, nCol), (nAlloc, cellSize)\n");
+  printf("(%d, %d, %d, %d), (%d, %d)\n", out->nCell, out->nLev, out->nRow,
+		  	  	  	  	  	  	  	   out->nCol, out->nAlloc, out->cellSize);
+  printf("in->(nCell, nLev, nRow=dim, nCol), (nAlloc, cellSize)\n");
+  printf("(%d, %d, %d, %d), (%d, %d)\n", in->nCell, in->nLev, in->nRow,
+  		  	  	  	  	  	  	  	   in->nCol, in->nAlloc, in->cellSize);
+  printf("---\n");*/
+
+  int32 bf_dim, nRow, nEP_switch;
+  bf_dim = bf->nRow;
+  /*printf("bf_dim: %d \n", bf_dim);*/
+  if (bf_dim > 1) {
+  	  nRow = nEP;
+  	  nEP_switch = nEP;
+  } else{
+  	  nRow = nEP * dim;
+  	  nEP_switch = 0;
+  }
+  /*printf("nEP_switch: %d", nEP_switch);*/
 
 #ifdef DEBUG_FMF
-  if ((out->nCol != in->nCol) || (out->nRow != (dim * nEP))
+  /*if ((out->nCol != in->nCol) || (out->nRow != (dim * nEP))*/
+  if ((out->nCol != in->nCol) || (out->nRow != nRow)
       || (out->nLev != bf->nLev)) {
     errput( ErrHead "ERR_BadMatch: (%d %d %d), (%d %d %d), (%d %d %d)\n",
 	    out->nLev, out->nRow, out->nCol,
@@ -766,23 +797,38 @@ int32 bf_actt( FMField *out, FMField *bf, FMField *in )
   }
 #endif
 
+  /*int32 jj, kk;
+  printf("\niterations:: nQP: %d, dim: %d, out->nCol: %d, nEP: %d \n",
+		  nQP, dim, out->nCol, nEP);
+  printf("pout[out->nCol*ii+ic] = pbf[ii] * (*pin)\n");*/
   fmf_fillC( out, 0.0 );
   for (iqp = 0; iqp < nQP; iqp++) {
     pbf = FMF_PtrLevel( bf, iqp );
     pout = FMF_PtrLevel( out, iqp );
     pin = FMF_PtrLevel( in, iqp );
+    /*printf(".. iqp: %d ..............\n", iqp);*/
 
     for (ir = 0; ir < dim; ir++) {
       for (ic = 0; ic < out->nCol; ic++) {
 	for (ii = 0; ii < nEP; ii++) {
-	  pout[out->nCol*ii+ic] = pbf[ii] * (*pin);
+	  /*printf("iqp: %d, ir: %d, ic: %d, ii: %d ; out->nCol*ii+ic : %d \n",
+			  iqp, ir, ic, ii, out->nCol*ii+ic);*/
+	  pout[out->nCol*ii+ic] = pbf[ir*nEP_switch+ii] * (*pin);
+	  /*printf("%.6e = %.6e * %.6e \n",
+			  pout[out->nCol*ii+ic], pbf[ir*nEP_switch+ii], *pin);
+	  printf("%d = %d * %d \n", out->nCol*ii+ic, ir*nEP_switch+ii, pin);*/
+	  /*printf("pin: %.6e ; *pin: %.6e ; (*pin): %.6e \n", pin, *pin);*/
 	}
 	pin++;
       }
+      if (bf_dim == 1) {
       pout += out->nCol * nEP;
+      }
     }
+	/*printf("out:\n");
+	fmf_print( out, stdout, 0 );*/
   }
-
+  /*printf("-------------------------------------\n");*/
   return( RET_OK );
 }
 

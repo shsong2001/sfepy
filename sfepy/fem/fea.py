@@ -1,7 +1,7 @@
 import numpy as nm
 
 from sfepy.base.base import Struct, assert_
-from sfepy.fem.mappings import VolumeMapping, SurfaceMapping
+from sfepy.fem.mappings import VolumeMapping, SurfaceMapping, HdivMapping
 from poly_spaces import PolySpace
 from fe_surface import FESurface
 
@@ -495,3 +495,81 @@ class SurfaceApproximation(Approximation):
 
         return self.qp_coors[qpkey]
 
+class HdivApproximation(Approximation):
+    """
+    JV: Vector valued approximation
+    (at the moment, it is suited to Hdiv approx.)
+    """
+    def get_v_data_shape(self, integral=None):
+        """returns (n_el, n_qp, dim, n_ep)"""
+        if integral is not None:
+#             bf_vg = self.get_base('v', 1, integral)
+            bf = self.get_base('v', 0, integral)
+#             return (self.region.shape[self.ig].n_cell,) + bf_vg.shape[-3:]
+            return (self.region.shape[self.ig].n_cell,) + bf.shape
+        else:
+            raise NotImplementedError
+#             return (self.region.shape[self.ig].n_cell,
+#                     self.interp.gel.dim, self.n_ep['v'])
+
+    def describe_geometry(self, field, gtype, region, integral=None,
+                          return_mapping=False):
+        """
+        Compute jacobians, element volumes and base function derivatives
+        for Volume-type geometries (volume mappings), and jacobians,
+        normals and base function derivatives for Surface-type
+        geometries (surface mappings).
+        JV: facets volumes, facets orientations
+        Notes
+        -----
+        - volume mappings can be defined on a part of an element group,
+          although the field has to be defined always on the whole group.
+        - surface mappings are defined on the surface region
+        - surface mappings require field order to be > 0
+        """
+        print('JV: fea.HdivApproximation.describe_geometry : potreba upravit')
+        domain = field.domain
+        mesh = domain.mesh
+        group = domain.groups[self.ig]
+        coors = domain.get_mesh_coors(actual=True)
+
+        if gtype == 'volume':
+            if integral is None:
+                from sfepy.fem import Integral
+                integral = Integral('i_tmp', 'v', 1)
+
+            qp = self.get_qp('v', integral)
+            iels = region.get_cells(self.ig)
+
+            facet_oris = domain.cmesh.facet_oris
+            fo_shape = nm.array([mesh.n_els[self.ig], mesh.n_e_ps[self.ig]])
+            n_dofs_offsets = nm.hstack([0, mesh.n_els*mesh.n_e_ps])
+            beg = nm.sum(n_dofs_offsets[0:self.ig+1])
+            ind = slice(beg, beg + fo_shape.prod())
+            facet_oris_ig = nm.reshape(facet_oris[ind], fo_shape)
+
+            econn = field.aps[self.ig].econn
+
+            geo_ps = self.interp.get_geom_poly_space('v')
+            ps = self.interp.poly_spaces['v']
+            bf = self.get_base('v', 0, integral, iels=iels)
+
+            conn = nm.take(group.conn, iels, axis=0)
+            mapping = HdivMapping(coors, conn, facet_oris_ig, ps, geo_ps)
+            cmap = mapping.get_mapping(qp.vals, qp.weights, poly_space=ps,
+                                     ori=self.ori)
+            out = cmap
+
+        else:
+            raise ValueError('unknown geometry type: %s' % gtype)
+
+        if out is not None:
+            # Store the integral used.
+            out.integral = integral
+            out.qp = qp
+            out.ps = ps
+
+        if return_mapping:
+            out = (out, mapping)
+
+        return out

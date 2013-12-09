@@ -7,11 +7,15 @@ import numpy as np
 cdef class CMapping:
 
     def __cinit__(self, n_el, n_qp, dim, n_ep, mode='volume', flag=0):
-        if flag:
-            self.bf = np.empty((n_el, n_qp, 1, n_ep), dtype=np.float64)
+        if mode == 'volume':
+            if flag:
+                self.bf = np.empty((n_el, n_qp, 1, n_ep), dtype=np.float64)
 
-        else:
-            self.bf = np.empty((1, n_qp, 1, n_ep), dtype=np.float64)
+            else:
+                self.bf = np.empty((1, n_qp, 1, n_ep), dtype=np.float64)
+
+        elif mode == 'Hdiv_volume':
+            self.bf = np.empty((n_el, n_qp, dim, n_ep), dtype=np.float64)
 
         array2fmfield4(self._bf, self.bf)
         self.geo.bf = self._bf
@@ -32,6 +36,20 @@ cdef class CMapping:
             self.normal = None
             self.geo.normal = NULL
 
+        elif mode == 'Hdiv_volume':
+#             self.bfgrad = np.empty((n_el, n_qp, dim, dim, n_ep),
+#                                    dtype=np.float64)
+#             self.bfdiv = np.empty((n_el, n_qp, 1, n_ep), dtype=np.float64)
+
+#             self.bfg = np.empty((n_el, n_qp, dim, n_ep), dtype=np.float64)
+            self.bfg = np.empty((n_el, n_qp, 1, n_ep), dtype=np.float64)
+            array2fmfield4(self._bfg, self.bfg)
+            self.geo.bfGM = self._bfg
+
+#             self.bfdivM = np.empty((n_el, n_qp, 1, n_ep), dtype=np.float64)
+#             array2fmfield4(self._bfdivM, self.bfdivM)
+#             self.geo.bfdivM = self._bfdivM
+
         else:
             self.bfg = None
             self.geo.bfGM = NULL
@@ -43,11 +61,14 @@ cdef class CMapping:
         self.mode = mode
         self.shape = (n_el, n_qp, dim, n_ep)
 
-        self.geo.mode = {'volume' : MM_Volume,
-                         'surface' : MM_Surface,
-                         'surface_extra' : MM_SurfaceExtra}[mode]
+        if mode != 'Hdiv_volume':
+            self.geo.mode = {'volume' : MM_Volume,
+                             'surface' : MM_Surface,
+                             'surface_extra' : MM_SurfaceExtra}[mode]
+
         self.geo.nEl = self.n_el = n_el
         self.geo.nQP = self.n_qp = n_qp
+
         self.geo.dim = self.dim = dim
         self.geo.nEP = self.n_ep = n_ep
 
@@ -73,6 +94,39 @@ cdef class CMapping:
                  np.ndarray[float64, mode='c', ndim=3] bfgr not None,
                  np.ndarray[float64, mode='c', ndim=4] ebfgr,
                  np.ndarray[float64, mode='c', ndim=1] weights not None):
+        """
+        Describe the element geometry - compute the reference element
+        mapping.
+        """
+        cdef int32 ret = 0
+        cdef FMField _bfgr[1], _ebfgr[1], _weights[1]
+        cdef float64 *_coors = &coors[0, 0]
+        cdef int32 n_nod = coors.shape[0]
+        cdef int32 dim = coors.shape[1]
+        cdef int32 *_conn = &conn[0, 0]
+        cdef int32 n_el = conn.shape[0]
+        cdef int32 n_ep = conn.shape[1]
+
+        if ebfgr is None:
+            ebfgr = np.array([0], ndmin=4, dtype=np.float64)
+
+        array2fmfield3(_bfgr, bfgr)
+        array2fmfield4(_ebfgr, ebfgr)
+        array2fmfield1(_weights, weights)
+
+        ret = map_describe(self.geo, _coors, n_nod, dim, _conn, n_el, n_ep,
+                           _bfgr, _ebfgr, _weights)
+
+        if ret:
+            errclear()
+            raise ValueError('ccore error (see above)')
+
+    def Hdiv_describe(self,
+            np.ndarray[float64, mode='c', ndim=2] coors not None,
+            np.ndarray[int32, mode='c', ndim=2] conn not None,
+            np.ndarray[float64, mode='c', ndim=3] bfgr not None,
+            np.ndarray[float64, mode='c', ndim=4] ebfgr,
+            np.ndarray[float64, mode='c', ndim=1] weights not None):
         """
         Describe the element geometry - compute the reference element
         mapping.

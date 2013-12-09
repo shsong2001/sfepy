@@ -524,6 +524,8 @@ def dq_div_vector(np.ndarray out not None,
     array2fmfield1(_state, state)
     array2pint2(&_conn, &n_el, &n_ep, conn)
 
+    print 'cy JV: dq_div_vector in terms.pyx'
+#     print 'state: ', state
     ret = _dq_div_vector(_out, _state, 0, cmap.geo, _conn, n_el, n_ep)
     return ret
 

@@ -675,7 +675,10 @@ int32 dw_lin_convect( FMField *out, FMField *grad, FMField *stateB,
 int32 dw_div( FMField *out, FMField *coef, FMField *div,
 	      Mapping *svg, Mapping *vvg, int32 isDiff )
 {
+  /*printf("===================================\n");*/
+  printf("C JV: termsNavierStokes.c : dw_div\n");
   int32 ii, nEPP, dim, nQP, nEP, ret = RET_OK;
+
   FMField *ftgu = 0, *ftg = 0;
   FMField gcl[1];
 
@@ -683,36 +686,81 @@ int32 dw_div( FMField *out, FMField *coef, FMField *div,
   nEP = vvg->bfGM->nCol;
   dim = vvg->bfGM->nRow;
   nEPP = svg->bf->nCol;
+  /*printf("out->(nCell, nLev, nRow, nCol), (nAlloc, cellSize)\n");
+  printf("(%d, %d, %d, %d), (%d, %d)\n", out->nCell, out->nLev, out->nRow,
+  	out->nCol, out->nAlloc, out->cellSize);
+  printf("coef->(nCell, nLev, nRow, nCol), (nAlloc, cellSize)\n");
+  printf("(%d, %d, %d, %d), (%d, %d)\n", coef->nCell, coef->nLev, coef->nRow,
+    coef->nCol, coef->nAlloc, coef->cellSize);
+  printf("div->(nCell, nLev, nRow, nCol), (nAlloc, cellSize)\n");
+  printf("(%d, %d, %d, %d), (%d, %d)\n", div->nCell, div->nLev, div->nRow,
+  	div->nCol, div->nAlloc, div->cellSize);
+  printf("svg->bf->(nCell, nLev, nRow, nCol=nEPP), (nAlloc, cellSize)\n");
+  printf("(%d, %d, %d, %d), (%d, %d)\n", svg->bf->nCell, svg->bf->nLev,
+    svg->bf->nRow, svg->bf->nCol, svg->bf->nAlloc, svg->bf->cellSize);
+  printf("vvg->bfGM->(nCell, nLev=nQP, nRow=dim, nCol=nEP), (nAlloc, cellSize)\n");
+  printf("(%d, %d, %d, %d), (%d, %d)\n", vvg->bfGM->nCell, vvg->bfGM->nLev,
+    vvg->bfGM->nRow, vvg->bfGM->nCol, vvg->bfGM->nAlloc, vvg->bfGM->cellSize);
+  printf("isDiff: %d \n", isDiff);*/
+
+  int32 nCol;
+  if (vvg->bf->nCol == 1){
+	  nCol = nEP * dim;
+  } else {
+	  nCol = nEP;
+  }
 
   gcl->nAlloc = -1;
-  fmf_pretend( gcl, vvg->bfGM->nCell, nQP, 1, nEP * dim, vvg->bfGM->val0 );
+  /*fmf_pretend( gcl, vvg->bfGM->nCell, nQP, 1, nEP * dim, vvg->bfGM->val0 );*/
+  fmf_pretend( gcl, vvg->bfGM->nCell, nQP, 1, nCol, vvg->bfGM->val0 );
+  /*printf("gcl->(nCell, nLev, nRow, nCol), (nAlloc, cellSize)\n");
+  printf("(%d, %d, %d, %d), (%d, %d)\n", gcl->nCell, gcl->nLev, gcl->nRow,
+    	gcl->nCol, gcl->nAlloc, gcl->cellSize);*/
 
   if (isDiff == 1) {
-    fmf_createAlloc( &ftg, 1, nQP, nEPP, dim * nEP );
+    /*fmf_createAlloc( &ftg, 1, nQP, nEPP, dim * nEP );*/
+	fmf_createAlloc( &ftg, 1, nQP, nEPP, nCol );
+    /*printf("ftg->(nCell, nLev, nRow, nCol), (nAlloc, cellSize)\n");
+    printf("(%d, %d, %d, %d), (%d, %d)\n", ftg->nCell, ftg->nLev, ftg->nRow,
+      	ftg->nCol, ftg->nAlloc, ftg->cellSize);*/
   } else {
     fmf_createAlloc( &ftgu, 1, nQP, nEPP, 1 );
   }
 
   for (ii = 0; ii < out->nCell; ii++) {
     FMF_SetCell( out, ii );
-    FMF_SetCell( gcl, ii );
+    FMF_SetCell( gcl, ii ); /* vvg->bfGM */
     FMF_SetCell( vvg->det, ii );
     FMF_SetCellX1( coef, ii );
     FMF_SetCellX1( svg->bf, ii );
 
+    /*printf("-- iterations ii = %d ---------------------------\n", ii);
+    printf("gcl=vvg->bfGM:\n");
+    fmf_print( gcl, stdout, 0 );*/
+
     if (isDiff == 1) {
-      fmf_mulATB_nn( ftg, svg->bf, gcl );
+      fmf_mulATB_nn( ftg, svg->bf, gcl ); /*##############*/
       fmf_mulAF( ftg, ftg, coef->val );
-      fmf_sumLevelsMulF( out, ftg, vvg->det->val );
+      /*printf("ftg:\n");
+      fmf_print( ftg, stdout, 0 );*/
+      fmf_sumLevelsMulF( out, ftg, vvg->det->val ); /*##############*/
+      /*printf("vvg->det:\n");
+      fmf_print( vvg->det, stdout, 0 );
+      printf("out:\n");
+      fmf_print( out, stdout, 0 );*/
     } else {
       FMF_SetCell( div, ii );
+      /*printf("div:\n");
+      fmf_print( div, stdout, 0 );*/
       fmf_mulATB_nn( ftgu, svg->bf, div );
+      /*printf("ftgu:\n");
+      fmf_print( ftgu, stdout, 0 );*/
       fmf_mulAF( ftgu, ftgu, coef->val );
       fmf_sumLevelsMulF( out, ftgu, vvg->det->val );
     }
     ERR_CheckGo( ret );
   }
-
+  /*printf("===================================\n");*/
  end_label:
   if (isDiff) {
     fmf_freeDestroy( &ftg );
@@ -732,6 +780,7 @@ int32 dw_div( FMField *out, FMField *coef, FMField *div,
 int32 dw_grad( FMField *out, FMField *coef, FMField *state,
 	       Mapping *svg, Mapping *vvg, int32 isDiff )
 {
+  printf("C JV: termsNavierStokes.c : dw_grad\n");
   int32 ii, nEPU, dim, nQP, nEP, ret = RET_OK;
   FMField *gtfp = 0, *gtf = 0;
   FMField gcl[1];
@@ -741,11 +790,20 @@ int32 dw_grad( FMField *out, FMField *coef, FMField *state,
   nEPU = vvg->bfGM->nCol;
   nEP = svg->bf->nCol;
 
+  int32 nRow;
+    if (svg->bf->nCol == 1){
+  	  nRow = nEPU * dim;
+    } else {
+  	  nRow = nEPU;
+    }
+
   gcl->nAlloc = -1;
-  fmf_pretend( gcl, vvg->bfGM->nCell, nQP, 1, nEPU * dim, vvg->bfGM->val0 );
+  /*fmf_pretend( gcl, vvg->bfGM->nCell, nQP, 1, nEPU * dim, vvg->bfGM->val0 );*/
+  fmf_pretend( gcl, vvg->bfGM->nCell, nQP, 1, nRow, vvg->bfGM->val0 );
 
   if (isDiff == 1) {
-    fmf_createAlloc( &gtf, 1, nQP, dim * nEPU, nEP );
+    /*fmf_createAlloc( &gtf, 1, nQP, dim * nEPU, nEP );*/
+    fmf_createAlloc( &gtf, 1, nQP, nRow, nEP );
   } else {
     fmf_createAlloc( &gtfp, 1, nQP, dim * nEPU, 1 );
   }

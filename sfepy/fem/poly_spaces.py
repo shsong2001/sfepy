@@ -836,3 +836,134 @@ class LobattoTensorProductPolySpace(PolySpace):
             base = ebase
 
         return base
+
+class RaviartThomasPolySpace(PolySpace):
+    """Raviart-Thomas space on a simplex domain."""
+    name = 'RaviartThomas_simplex'
+
+    def __init__(self, name, geometry, order):
+        PolySpace.__init__(self, name, geometry, order)
+
+        n_v = geometry.n_vertex
+        mtx = nm.ones((n_v, n_v), nm.float64)
+        mtx[0:n_v-1,:] = nm.transpose(geometry.coors)
+        self.mtx_i = nm.ascontiguousarray(nla.inv(mtx))
+#         self.rhs = nm.ones((n_v,), nm.float64)
+
+        self.nodes, self.nts, node_coors = self._define_nodes()
+        self.node_coors = nm.ascontiguousarray(node_coors)
+        self.n_nod = self.nodes.shape[0]
+#         self.n_components = 1 #number of components instead of shape
+        self.dpn = 1
+        print 'JV: poly_spaces.RaviartThomasPolySpace.__init__'
+
+    def _define_nodes(self):
+        geometry = self.geometry
+        n_v, dim = geometry.n_vertex, geometry.dim
+        order = self.order
+
+        if order == 0:
+            pass
+        else:
+            raise NotImplementedError
+
+        if dim == 1:
+            n_nod = (order+1) * (order+3)
+            nts = nm.array([[1,0]], dtype=nm.int32)#node types
+            nodes = nm.array([[1,1]], dtype=nm.float64) / 2
+            n_nod = nodes.shape[0] # number of dofs per element
+        elif dim == 2:
+            n_nod = (order+1) * (order+3)
+            nts = nm.array([[1,0],[1,1],[1,2]], dtype=nm.int32)#node types
+            nodes = nm.array([[1,1,0],[0,1,1],[1,0,1]],dtype=nm.float64) / 2
+            n_nod = nodes.shape[0] # number of dofs per element
+        elif dim == 3:
+            n_nod = ((order+1) * (order+2) * (order+4)) / 2
+            raise NotImplementedError
+
+        node_coors = nm.dot(nodes, geometry.coors)
+        return nodes, nts, node_coors
+
+    def _eval_base(self, coors, diff=False, ori=None,
+                   suppress_errors=False, eps=1e-15):
+        print 'JV: poly_spaces.RaviartThomasPolySpace._eval_base'
+        print ' order = %d; diff = %s' %(self.order,str(diff))
+#         base = eval_RTN_simplex(coors, self.mtx_i, self.nodes, self.order, diff,
+#                                 eps, not suppress_errors)
+        base = eval_RTN_simplex(coors, self.nodes, self.order, diff)
+        return base
+
+#     def describe_nodes(self):
+#         return NodeDescription(self.nts, self.nodes)
+
+# def eval_RTN_simplex(coors, mtx_i, nodes, order, diff, eps, suppress_errors):
+def eval_RTN_simplex(coors, nodes, order, diff):
+    """
+    Evaluate Raviart-Thomas-(Nedelec) base polynomials in given points
+    on simplex domain.
+
+    Parameters
+    ----------
+    coors : array
+        The coordinates of the points, shape `(n_coor, dim)`.
+    mtx_i : array
+        The inverse of simplex coordinates matrix, shape `(dim + 1, dim + 1)`.
+    nodes : array
+        The description of finite element nodes, shape `(n_nod, dim + 1)`.
+    order : int
+        The polynomial order.
+    diff : bool
+        If True, return base function derivatives.
+    eps : float
+        The tolerance for snapping out-of-simplex point back to the simplex.
+    check_errors : bool
+        If True, raise ValueError if a barycentric coordinate is outside
+        the snap interval `[-eps, 1 + eps]`.
+
+    Returns
+    -------
+    out : array
+        The evaluated base functions, shape `(n_coor, 1 or dim, n_nod)`.
+    """
+    print 'JV: poly_spaces.eval_RTN_simplex'
+    n_coor, dim = coors.shape
+    n_nodes = nodes.shape[0]
+    if not diff:
+        base = nm.zeros([n_coor, dim, n_nodes])
+        # basis functions on reference element
+        eR = [lambda x: x-nm.array([0, 1]),
+              lambda x: 2**0.5*x,
+              lambda x: x-nm.array([1, 0])]
+        for ii in nm.arange(n_coor):
+            for jj in nm.arange(n_nodes):
+                base[ii, :, jj] = eR[jj](coors[ii])
+    elif diff == 'grad':
+        base = nm.zeros([n_coor, dim, dim, n_nodes])
+        grad_eR = [lambda x: 1, lambda x: 2**0.5, lambda x: 1]
+        for ii in nm.arange(n_coor):
+            for jj in nm.arange(n_nodes):
+                for idim in nm.arange(dim):
+                    base[ii, idim, idim, jj] = grad_eR[jj](coors[ii])
+        print 'JV: poly_spaces.eval_RTN_simplex :\n derivative'
+    elif diff == 1 or diff == 'g':
+        base = nm.zeros([n_coor, dim, n_nodes])
+        grad_eR = [lambda x: 1, lambda x: 2**0.5, lambda x: 1]
+        for ii in nm.arange(n_coor):
+            for jj in nm.arange(n_nodes):
+                for idim in nm.arange(dim):
+                    base[ii, idim, jj] = grad_eR[jj](coors[ii])
+        print 'JV: poly_spaces.eval_RTN_simplex :\n derivative'
+    elif diff == 'div':
+        base = nm.zeros([n_coor, 1, n_nodes])
+        div_eR=[lambda x: 2, lambda x: 2*2**0.5, lambda x: 2]
+        for ii in nm.arange(n_coor):
+            for jj in nm.arange(n_nodes):
+                base[ii, 0, jj] = div_eR[jj](coors[ii])
+    else:
+        raise NotImplementedError('diff (%s) in RTN base evaluation' \
+                                  % str(diff))
+
+    if order > 0:
+        print 'JV: poly_spaces.eval_RTN_simplex :\n derivative order > 0 \
+               not implemented'
+    return base

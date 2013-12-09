@@ -560,6 +560,22 @@ class Mesh(Struct):
         return mesh
 
     def _set_shape_info(self):
+        """
+        Notes
+        -----
+        n_nod :
+            number of nods
+        dim :
+            spatial dimension
+        n_els :
+            no. of elements per group
+        n_e_ps :
+            no. of vertices in element per group
+        el_offsets :
+        n_el :
+            total no. of elements
+        dims :
+        """
         self.n_nod, self.dim = self.coors.shape
         self.n_els = nm.array([conn.shape[0] for conn in self.conns])
         self.n_e_ps = nm.array([conn.shape[1] for conn in self.conns])

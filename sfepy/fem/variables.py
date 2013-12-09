@@ -14,7 +14,7 @@ from sfepy.fem.dof_info import (DofInfo, EquationMap, LCBCOperators,
                                 expand_nodes_to_equations,
                                 make_global_lcbc_operator, is_active_bc)
 from sfepy.fem.mappings import get_physical_qps
-from sfepy.fem.evaluate_variable import eval_real, eval_complex
+from sfepy.fem.evaluate_variable import eval_real, eval_complex, Hdiv_eval_real
 
 is_state = 0
 is_virtual = 1
@@ -751,14 +751,21 @@ class Variable(Struct):
         Setup number of DOFs and  DOF names.
         """
         self.n_nod = n_nod
-
-        self.n_dof = self.n_nod * self.n_components
-
         if self.dof_name is None:
             dof_name = 'aux'
         else:
             dof_name = self.dof_name
-        self.dofs = [dof_name + ('.%d' % ii) for ii in range(self.n_components)]
+
+        if self.field.poly_space_base in ['RaviartThomas', 'RT',
+                                          'RaviartThomasNedelec', 'RTN']:
+            dofs_per_node = self.field.interp.poly_spaces['v'].dpn
+            self.n_dof = self.n_nod * dofs_per_node
+            self.dofs = [dof_name + ('.%d' % ii)
+                         for ii in range(dofs_per_node)]
+        else:
+            self.n_dof = self.n_nod * self.n_components
+            self.dofs = [dof_name + ('.%d' % ii)
+                         for ii in range(self.n_components)]
 
     def get_primary(self):
         """
@@ -1737,11 +1744,20 @@ class FieldVariable(Variable):
 
             shape = self.get_data_shape(ig, integral, integration, region.name)
 
-            if self.dtype == nm.float64:
-                out = eval_real(vec, conn, geo, mode, shape, bf)
+            if self.field.__class__.family_name == 'volume_Hdiv_RaviartThomas':
+                if self.dtype == nm.float64:
+                    out = Hdiv_eval_real(vec, conn, geo, mode, shape, bf)
+
+                else:
+                    raise NotImplementedError('Hdiv_eval_complex is not \
+                                              implemented yet')
 
             else:
-                out = eval_complex(vec, conn, geo, mode, shape, bf)
+                if self.dtype == nm.float64:
+                    out = eval_real(vec, conn, geo, mode, shape, bf)
+
+                else:
+                    out = eval_complex(vec, conn, geo, mode, shape, bf)
 
             cache[key] = out
 

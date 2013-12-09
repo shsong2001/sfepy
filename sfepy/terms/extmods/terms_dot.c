@@ -116,30 +116,70 @@ int32 dw_volume_dot_vector( FMField *out, FMField *coef, FMField *val_qp,
                             Mapping *rvg, Mapping *cvg,
                             int32 isDiff )
 {
+  printf("========================================\n");
+  printf("C JV: terms_dot.c : dw_volume_dot_vector\n");
   int32 ii, dim, nc, nQP, nEPR, nEPC, ret = RET_OK;
-  FMField *ftfu = 0, *ftf1 = 0, *ftf = 0,*cf = 0, *cfu = 0;
+  FMField *ftfu = 0, *ftf1 = 0, *ftf = 0, *cf = 0, *cfu = 0;
 
   nQP = rvg->nQP;
   dim = rvg->dim;
   nEPR = rvg->bf->nCol;
   nEPC = cvg->bf->nCol;
   nc = coef->nCol;
+  /*printf("coef->(nCell, nLev, nRow, nCol), (nAlloc, cellSize)\n");
+  printf("(%d, %d, %d, %d), (%d, %d)\n", coef->nCell, coef->nLev, coef->nRow,
+    		 coef->nCol, coef->nAlloc, coef->cellSize);
+  printf("rvg->bf->(nCell, nLev, nRow, nCol), (nAlloc, cellSize)\n");
+  printf("(%d, %d, %d, %d), (%d, %d)\n", rvg->bf->nCell, rvg->bf->nLev,
+		  rvg->bf->nRow, rvg->bf->nCol, rvg->bf->nAlloc, rvg->bf->cellSize);
+  printf("cvg->bf->(nCell, nLev, nRow, nCol), (nAlloc, cellSize)\n");
+  printf("(%d, %d, %d, %d), (%d, %d)\n", cvg->bf->nCell, cvg->bf->nLev,
+		  cvg->bf->nRow, cvg->bf->nCol, cvg->bf->nAlloc, cvg->bf->cellSize);
+  printf("out->(nCell, nLev, nRow, nCol), (nAlloc, cellSize)\n");
+  printf("(%d, %d, %d, %d), (%d, %d)\n", out->nCell, out->nLev, out->nRow,
+    		 out->nCol, out->nAlloc, out->cellSize);*/
+
+  int32 nRow, nCol, switcher, Col_switcher, Row_switcher;
+  Row_switcher = 0;
+  Col_switcher = 0;
+  if (rvg->bf->nRow > 1) {
+	  nRow = nEPR;
+	  Row_switcher = 1;
+  } else{
+	  nRow = nEPR * dim;
+  }
+  if (cvg->bf->nRow > 1) {
+  	  nCol = nEPC;
+  	  Col_switcher = 1;
+    } else{
+  	  nCol = nEPC * dim;
+    }
+  switcher = Row_switcher + Col_switcher;
+
+  /*printf("nRow=%d; nCol=%d; switcher=%d; \n", nRow, nCol, switcher);
+  printf("isDiff=%d; nc=%d; \n", isDiff, nc);*/
 
   if (isDiff) {
-    fmf_createAlloc( &ftf, 1, nQP, nEPR * dim, nEPC * dim );
-
+    /*fmf_createAlloc( &ftf, 1, nQP, nEPR * dim, nEPC * dim );*/
+    fmf_createAlloc( &ftf, 1, nQP, nRow, nCol );
     if (nc == 1) {
       fmf_createAlloc( &ftf1, 1, nQP, nEPR, nEPC );
     } else {
-      fmf_createAlloc( &cf, 1, nQP, dim, dim * nEPC );
+      /*fmf_createAlloc( &cf, 1, nQP, dim, dim * nEPC );*/
+      fmf_createAlloc( &cf, 1, nQP, dim, nRow );
     }
   } else {
-    fmf_createAlloc( &ftfu, 1, nQP, dim * nEPR, 1 );
+    /*fmf_createAlloc( &ftfu, 1, nQP, dim * nEPR, 1 );*/
+    fmf_createAlloc( &ftfu, 1, nQP, nRow, 1 );
     if (nc > 1) {
       fmf_createAlloc( &cfu, 1, nQP, dim, 1 );
     }
   }
 
+  int32 iqp, ic, ir, kk, jj, nRC, nCd;
+  float64 mat, u, v;
+  nRC = nCol*nRow;
+  nCd = nCol*dim;
   for (ii = 0; ii < out->nCell; ii++) {
     FMF_SetCell( out, ii );
     FMF_SetCellX1( coef, ii );
@@ -150,12 +190,77 @@ int32 dw_volume_dot_vector( FMField *out, FMField *coef, FMField *val_qp,
       FMF_SetCellX1( cvg->bf, ii );
 
       if (nc == 1) {
+    	if (switcher == 0){
         fmf_mulATB_nn( ftf1, rvg->bf, cvg->bf );
         bf_buildFTF( ftf, ftf1 );
         fmf_mul( ftf, coef->val );
+    	}else if (Col_switcher == 0){
+    	  /*printf("term 03 \n");
+    	  printf("rvg->bf:\n");
+    	  fmf_print( rvg->bf, stdout, 0 );
+    	  printf("nQP=%d, nCol=%d, nRow=%d, nEPR, nRC \n",
+    			  nQP, nCol, nRow, nEPR, nRC);*/
+    	  fmf_fillC( ftf, 0.0 );
+    	  for (iqp=0; iqp<nQP; iqp++){
+    		mat = coef->val[iqp];
+    		  for (ic=0; ic<nCol; ic++){
+  			    for (ir=0; ir<nRow; ir++){
+    		      u = rvg->bf->val[iqp*nRC + ic*nRow + ir];
+    		      ftf->val[iqp*nRC + ir*nCol + ic] += mat*u;
+    		      /*printf("indices: iqp=%d, ic=%d, ir=%d, iu=%d, iftf=%d \n",
+    		    		  iqp, ic, ir, iqp*nCd + ic*nCol + ir,
+    		    		  iqp*nRC + ir*nCol + ic);
+    		      printf("mat=%f, u=%f, res=%f \n", mat, u, mat*u);
+    		      printf("ftf:\n");
+    		      fmf_print( ftf, stdout, 0 );*/
+    		  }
+    		}
+    	  }
+    	}
+    	else if (Row_switcher == 0){
+    	  /*printf("term 30 \n");
+    	  printf("cvg->bf:\n");
+    	  fmf_print( cvg->bf, stdout, 0 );
+    	  printf("nQP=%d, nCol=%d, nRow=%d, nEPR, nRC \n",
+    	      	  nQP, nCol, nRow, nEPR, nRC);*/
+      	  fmf_fillC( ftf, 0.0 );
+      	  for (iqp=0; iqp<nQP; iqp++){
+      		mat = coef->val[iqp];
+      		for (ic=0; ic<nCol; ic++){
+    		  for (ir=0; ir<nRow; ir++){
+      		    u = cvg->bf->val[iqp*nRC + ir*nCol + ic];
+      		    ftf->val[iqp*nRC + ir*nCol + ic] += mat*u;
+      		    /*printf("indices: iqp=%d, ic=%d, ir=%d, iu=%d, iftf=%d \n",
+      		    		  iqp, ic, ir, iqp*nCd + ic*nCol + ir,
+      		    		  iqp*nRC + ir*nCol + ic);
+      		    printf("mat=%f, u=%f, res=%f \n", mat, u, mat*u);
+      		    printf("ftf:\n");
+      		    fmf_print( ftf, stdout, 0 );*/
+      		  }
+      		}
+      	  }
+    	}
       } else {
+    	if (switcher == 0){
         bf_ract( cf, cvg->bf, coef );
         bf_actt( ftf, rvg->bf, cf );
+    	}else if (switcher == 2){
+        fmf_fillC( ftf, 0.0 );
+        for (iqp=0; iqp<nQP; iqp++){
+          for (ir=0; ir<nRow; ir++){
+        	for (ic=0; ic<nCol; ic++){
+        	  for (kk=0; kk<dim; kk++){
+        		for (jj=0; jj<dim; jj++){
+        		  mat = coef->val[iqp*dim*dim + dim*kk + jj];
+        		  u = rvg->bf->val[iqp*nCd + kk*nCol + ir];
+        		  v = cvg->bf->val[iqp*nCd + jj*nCol + ic];
+        		  ftf->val[iqp*nRC + ir*nCol + ic] += mat*u*v;
+        		}
+        	  }
+        	}
+          }
+        }
+    	}
       }
       fmf_sumLevelsMulF( out, ftf, rvg->det->val );
     } else {
@@ -168,6 +273,7 @@ int32 dw_volume_dot_vector( FMField *out, FMField *coef, FMField *val_qp,
         fmf_mulAB_nn( cfu, coef, val_qp );
         bf_actt( ftfu, rvg->bf, cfu );
       }
+
       fmf_sumLevelsMulF( out, ftfu, rvg->det->val );
     }
     ERR_CheckGo( ret );
@@ -187,7 +293,7 @@ int32 dw_volume_dot_vector( FMField *out, FMField *coef, FMField *val_qp,
       fmf_freeDestroy( &cfu );
     }
   }
-
+  /*printf("========================================\n");*/
   return( ret );
 }
 

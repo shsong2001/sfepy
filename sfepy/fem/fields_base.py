@@ -25,7 +25,7 @@ from sfepy.fem.fe_surface import FESurface
 from sfepy.fem.integrals import Integral
 from sfepy.fem.linearizer import get_eval_dofs, get_eval_coors, create_output
 
-def parse_approx_order(approx_order):
+def parse_approx_order(approx_order, poly_space_base='lagrange'):
     """
     Parse the uniform approximation order value (str or int).
     """
@@ -51,7 +51,7 @@ def parse_approx_order(approx_order):
     if ao < 0:
         raise ValueError(ao_msg % approx_order)
 
-    elif ao == 0:
+    elif ao == 0 and poly_space_base.lower() == 'lagrange':
         discontinuous = True
 
     return ao, force_bubble, discontinuous
@@ -322,7 +322,8 @@ class Field(Struct):
 
         key = space + '_' + poly_space_base
 
-        approx_order = parse_approx_order(conf.approx_order)
+        approx_order = parse_approx_order(conf.approx_order, 
+                                          poly_space_base=poly_space_base)
         ao, force_bubble, discontinuous = approx_order
 
         region = regions[conf.region]

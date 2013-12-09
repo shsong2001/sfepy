@@ -47,20 +47,35 @@ int32 dq_grad( FMField *out, FMField *state, int32 offset,
 {
   int32 ii, nQP, ret = RET_OK;
   FMField *st = 0;
+  printf("C JV: termsBasic.c : dq_grad\n");
 
   state->val = FMF_PtrFirst( state ) + offset;
 
   nQP = vg->bfGM->nLev;
+  /*printf("cellSize: %f \n", vg->bgGM);*/
 
   fmf_createAlloc( &st, 1, 1, nEP, out->nCol );
 
   for (ii = 0; ii < nEl; ii++) {
     FMF_SetCell( out, ii );
     FMF_SetCell( vg->bfGM, ii );
+    if ( ii == 0 | ii == 1) {
+        printf("\nii: %d \n", ii);
+        printf("out:\n");
+        fmf_print( out, stdout, 0 );
+        printf("vg->bfGM:\n");
+        fmf_print( vg->bfGM, stdout, 0 );
+        }
 
     ele_extractNodalValuesNBN( st, state, conn + nEP * ii );
     fmf_mulAB_n1( out, vg->bfGM, st );
-
+    if ( ii == 0  | ii == 1) {
+    printf("st:\n");
+    fmf_print( st, stdout, 0 );
+    printf("out:\n");
+    fmf_print( out, stdout, 0 );
+    printf("end of IF:\n");
+    }
     ERR_CheckGo( ret );
   }
 
@@ -80,9 +95,26 @@ int32 dq_div_vector( FMField *out, FMField *state, int32 offset,
 		     Mapping *vg,
 		     int32 *conn, int32 nEl, int32 nEP )
 {
+  printf("C JV: termsBasic.c : dq_div_vector\n");
+  printf("out:\n");
+  fmf_print( out, stdout, 0 );
+  printf("state:\n");
+  fmf_print( state, stdout, 0 );
+  printf("offset: %d \n", offset);
+  printf("vg:\n");
+  /*map_print( vg, stdout, "volume" );*/
+  printf("conn: %d \n", conn);
+  printf("nEl: %d \n", nEl);
+  printf("nEP: %d \n", nEP);
+
   int32 ii, dim, nQP, ret = RET_OK;
   FMField *st = 0;
   FMField gcl[1], stv[1];
+  /*printf("st: \n");
+  printf("gcl: \n");
+  fmf_print( gcl, stdout, 0 );
+  printf("stv: \n");
+  fmf_print( stv, stdout, 0 );*/
 
   state->val = FMF_PtrFirst( state ) + offset;
 
@@ -91,14 +123,31 @@ int32 dq_div_vector( FMField *out, FMField *state, int32 offset,
 
   fmf_createAlloc( &st, 1, 1, dim, nEP );
   stv->nAlloc = -1;
+
   fmf_pretend( stv, 1, 1, nEP * dim, 1, st->val );
 
   gcl->nAlloc = -1;
   fmf_pretend( gcl, 1, nQP, 1, nEP * dim, vg->bfGM->val0 );
+  printf("dim: %d \n", dim);
+  printf("nQP: %d \n", nQP);
 
   for (ii = 0; ii < nEl; ii++) {
     FMF_SetCell( out, ii );
     FMF_SetCell( gcl, ii );
+    if ( ii == 0) {
+    printf("\nii: %d \n", ii);
+    printf("out:\n");
+    fmf_print( out, stdout, 0 );
+    printf("gcl:\n");
+    fmf_print( gcl, stdout, 0 );
+    printf("st:\n");
+    fmf_print( st, stdout, 0 );
+    printf("state:\n");
+    fmf_print( state, stdout, 0 );
+    /*printf("conn:\n");
+    fmf_print( conn, stdout, 0 );*/
+    printf("end of IF:\n");
+    }
 
     ele_extractNodalValuesDBD( st, state, conn + nEP * ii );
     fmf_mulAB_n1( out, gcl, stv );

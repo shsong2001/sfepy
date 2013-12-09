@@ -67,6 +67,8 @@ cdef class CMapping:
 
     cdef public np.ndarray bf
     cdef public np.ndarray bfg
+    cdef public np.ndarray bfgrad
+    cdef public np.ndarray bfdiv
     cdef public np.ndarray det
     cdef public np.ndarray normal
     cdef public np.ndarray volume

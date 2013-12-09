@@ -1423,14 +1423,20 @@ class Term(Struct):
                 fargs = self.call_get_fargs(_args, kwargs)
 
                 n_elr, n_qpr, dim, n_enr, n_cr = self.get_data_shape(varr)
-                n_row = n_cr * n_enr
+                if varr.field.poly_space_base in ['RaviartThomas']:
+                    n_row = n_enr
+                else:
+                    n_row = n_cr * n_enr
 
                 if diff_var is None:
                     shape = (n_elr, 1, n_row, 1)
 
                 else:
                     n_elc, n_qpc, dim, n_enc, n_cc = self.get_data_shape(varc)
-                    n_col = n_cc * n_enc
+                    if varc.field.poly_space_base in ['RaviartThomas']:
+                        n_col = n_enc
+                    else:
+                        n_col = n_cc * n_enc
 
                     shape = (n_elr, 1, n_row, n_col)
 

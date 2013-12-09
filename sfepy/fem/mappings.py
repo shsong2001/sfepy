@@ -308,3 +308,86 @@ class SurfaceMapping(Mapping):
         cmap.describe(self.coors, self.conn, bf_g, None, weights)
 
         return cmap
+
+class HdivMapping(Mapping):
+    """
+    HdivMapping
+    """
+    def __init__(self, coors, conn, facet_oris, poly_space, geo_ps):
+        self.coors = coors
+        self.conn = conn
+
+        try:
+            nm.take(self.coors, self.conn)
+
+        except IndexError:
+            output('coordinates shape: %s' % list(coors.shape))
+            output('connectivity: min: %d, max: %d' % (conn.min(), conn.max()))
+            msg = 'incompatible connectivity and coordinates (see above)'
+            raise IndexError(msg)
+
+        self.n_el, self.n_ep = conn.shape
+        self.dim = self.coors.shape[1]
+        self.facet_oris = facet_oris
+        self.poly_space = poly_space
+        self.geo_ps = geo_ps
+
+    def get_mapping(self, qp_coors, weights, poly_space=None, ori=None):
+        """
+        Get the mapping for given quadrature points, weights, and
+        polynomial space.
+
+        Returns
+        -------
+        cmap : CMapping instance
+            The volume mapping.
+        """
+        poly_space = get_default(poly_space, self.poly_space)
+
+#         bf_g = self.get_base(qp_coors, diff=True)
+        bf = self.get_base(qp_coors, diff=False)
+#         bfgrad = self.get_base(qp_coors, diff='grad')
+        bfg = self.get_base(qp_coors, diff='g')
+        bfdiv = self.get_base(qp_coors, diff='div')
+
+        flag = ori is not None
+
+        cmap = CMapping(self.n_el, qp_coors.shape[0], self.dim,
+                        poly_space.n_nod, mode='Hdiv_volume', flag=flag)
+#         cmap.describe(self.coors, self.conn, bf_g, ebf_g, weights)
+        ref_edge_length = get_edge_lenght(self.geo_ps.node_coors)
+        for ii in nm.arange(self.n_el):
+            coor = nm.take(self.coors, self.conn[ii], axis=0)
+            JT = nm.array([[coor[1,0]-coor[0,0],coor[2,0]-coor[0,0]],
+                           [coor[1,1]-coor[0,1],coor[2,1]-coor[0,1]]])
+            detJT = nm.linalg.det(JT)
+            edge_length = get_edge_lenght(coor)
+            nu = (self.facet_oris[ii]*2-1.)
+#             nu = nm.ones(edge_length.size)
+            coef = nu*edge_length/ref_edge_length/detJT
+
+            bfM = nm.zeros(bf.shape, dtype=nm.float64)
+            bfGM = nm.zeros(bfg.shape, dtype=nm.float64)
+            bfdivM = nm.zeros(bfdiv.shape, dtype=nm.float64)
+            for iqp in nm.arange(bf.shape[0]):
+                bfM[iqp] = coef*nm.dot(JT,bf[iqp])
+            bfdivM = coef*bfdiv
+            bfGM = coef*bfg
+
+            cmap.bf[ii] = bfM
+#             cmap.bfg[ii] = bfGM
+            cmap.bfg[ii] = bfdivM
+#             cmap.bfdivM[ii] = bfdivM
+
+            for iqp in nm.arange(weights.size):
+                cmap.det[ii][iqp] = detJT*weights[iqp]
+            cmap.volume[ii] = detJT/2
+        print "!! doplnit orientaci !!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+        return cmap
+
+def get_edge_lenght(coor):
+    n_v = coor.shape[0]
+    e_size = nm.zeros(n_v)
+    for ii in nm.arange(n_v):
+        e_size[ii] = nm.linalg.norm(coor[(ii+1)%n_v]-coor[ii])
+    return e_size

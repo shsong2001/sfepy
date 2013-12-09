@@ -621,7 +621,8 @@ int32 fmf_mulATB_nn( FMField *objR, FMField *objA, FMField *objB )
 {
   int32 i, j, k, il, wr, wa, wb;
   float64 *pr, *pa, *pb;
-
+  /*printf("-- fmfield.c : fmf_mulATB_nn-----------\n");
+  printf("ftg, svg->bf, gcl \n");*/
 #ifdef DEBUG_FMF
   if ((objR->nRow != objA->nCol) || (objR->nCol != objB->nCol)
       || (objA->nRow != objB->nRow)
@@ -636,6 +637,7 @@ int32 fmf_mulATB_nn( FMField *objR, FMField *objA, FMField *objB )
   wr = objR->nCol;
   wa = objA->nCol;
   wb = objB->nCol;
+
   for (il = 0; il < objR->nLev; il++) {
     pr = objR->val + objR->nCol * objR->nRow * il;
     pa = objA->val + objA->nCol * objA->nRow * il;
@@ -649,6 +651,7 @@ int32 fmf_mulATB_nn( FMField *objR, FMField *objA, FMField *objB )
       }
     }
   }
+
   return( RET_OK );
 }
 

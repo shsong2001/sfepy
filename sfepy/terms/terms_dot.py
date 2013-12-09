@@ -48,6 +48,9 @@ class DotProductVolumeTerm(Term):
     @staticmethod
     def dw_dot(out, mat, val_qp, vgeo, sgeo, fun, fmode):
         status = fun(out, mat, val_qp, vgeo, sgeo, fmode)
+#         print '\nout:'
+#         print out.shape
+#         print out
         return status
 
     @staticmethod
